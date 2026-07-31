@@ -1,0 +1,4 @@
+timestamp,user,source_ip,action,status
+2026-07-24 03:50:00,alice,198.51.100.30,login,success
+2026-07-24 03:51:00,bob,203.0.113.9,login,failed
+2026-07-24 03:52:00,alice,198.51.100.30,view_report,success

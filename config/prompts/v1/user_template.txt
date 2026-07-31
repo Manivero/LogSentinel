@@ -1,0 +1,4 @@
+Analyze the following log evidence for security-relevant activity.
+${context_block}${knowledge_block}
+Log evidence:
+$wrapped_log_data

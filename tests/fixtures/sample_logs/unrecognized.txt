@@ -1,0 +1,5 @@
+System boot sequence initiated at time offset 00:00:03.221
+Memory check: 16384MB OK
+Loading kernel modules... done
+Network interface eth0 configured with static IP 10.0.0.5
+Filesystem check completed without errors

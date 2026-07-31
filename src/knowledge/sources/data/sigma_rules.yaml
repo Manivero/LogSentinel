@@ -1,0 +1,103 @@
+# Bundled detection-engineering reference concepts, in the spirit of the
+# Sigma project's generic SIEM rule format (https://github.com/SigmaHQ).
+# These summarize common, well-known detection *concepts* in original
+# wording for this project's offline knowledge base — not a reproduction
+# of any specific upstream Sigma rule file.
+concepts:
+  - id: SIGMA-CONCEPT-001
+    name: SSH Brute Force via Failed Authentication Rate
+    category: authentication
+    description: >
+      A detection concept that counts failed SSH authentication events
+      grouped by source IP within a rolling time window and fires when
+      the count exceeds a threshold. The core signal is rate, not any
+      single event — one failed login is normal; dozens within minutes
+      from one source is not. Tuning the threshold and window trades
+      off detection speed against false positives from users who
+      simply mistype a password a few times.
+    detection_logic_summary: >
+      count(failed_auth_events) grouped by source_ip within window >=
+      threshold. Commonly paired with a second rule that flags a
+      *successful* login immediately following a burst of failures
+      from the same source, since that combination is a stronger
+      signal than either event alone.
+
+  - id: SIGMA-CONCEPT-002
+    name: Web Shell Indicators in Access Logs
+    category: web
+    description: >
+      A detection concept for identifying likely web-shell activity —
+      an attacker-uploaded script used to execute commands via HTTP
+      requests — by looking for requests to newly-created or unusual
+      file paths (especially in upload directories) combined with
+      suspicious query parameters resembling command execution.
+    detection_logic_summary: >
+      request_path matches an upload/writable directory pattern AND
+      request_path has an executable extension for the platform (.php,
+      .jsp, .aspx) AND query parameters resemble single-letter or
+      encoded command-execution parameter names. Often paired with a
+      check that the path was not present in a baseline crawl of the
+      known application structure.
+
+  - id: SIGMA-CONCEPT-003
+    name: SQL Injection Payload Patterns in Request Parameters
+    category: web
+    description: >
+      A detection concept matching common SQL injection syntax
+      fragments — UNION-based, boolean-based, and statement-
+      termination techniques — against URL and form parameters, tuned
+      to avoid flagging legitimate content that happens to contain SQL
+      keywords (e.g. a support ticket describing a database error).
+    detection_logic_summary: >
+      request_parameter matches (union.{0,40}select | 'or'.{0,10}'1'='1
+      | ;--| /*) case-insensitive, typically combined with a check that
+      the match appears in a parameter *value* rather than free-text
+      body content, to reduce false positives.
+
+  - id: SIGMA-CONCEPT-004
+    name: Reconnaissance via Sequential Path Enumeration
+    category: web
+    description: >
+      A detection concept for automated directory/file discovery tools:
+      one source requesting many distinct paths from a common wordlist
+      in a short window, most of which return 404, is a strong signal
+      of scanning activity even without matching any specific known
+      scanner signature.
+    detection_logic_summary: >
+      count(distinct request_path) grouped by source_ip within window
+      >= threshold AND ratio of 404 responses within that group is
+      high. Distinguishes scanning from a legitimate crawler by request
+      rate and path randomness rather than relying solely on
+      User-Agent, which is trivially spoofed.
+
+  - id: SIGMA-CONCEPT-005
+    name: Privilege Escalation via Unusual sudo/su Usage
+    category: authentication
+    description: >
+      A detection concept for privilege-escalation attempts on Unix-
+      like systems: `sudo` or `su` invocations that are unusual for the
+      invoking account's normal behavior — a new account using sudo
+      for the first time, sudo invoked for a command the account
+      doesn't normally run, or repeated sudo failures suggesting a
+      guessed password.
+    detection_logic_summary: >
+      sudo/su event where user has no prior sudo history in the
+      baseline period, OR consecutive sudo authentication failures
+      exceeding a small threshold for one account.
+
+  - id: SIGMA-CONCEPT-006
+    name: Anomalous User-Agent or Missing Standard Headers
+    category: web
+    description: >
+      A detection concept flagging requests whose User-Agent matches
+      a known scripting library, security tool, or is absent entirely
+      — legitimate browser traffic almost always includes a
+      recognizable, internally-consistent User-Agent string, so its
+      absence or an unusual value is a low-cost, high-volume signal
+      best combined with other indicators rather than used alone.
+    detection_logic_summary: >
+      user_agent matches known-tool patterns (curl, python-requests,
+      sqlmap, nikto, etc.) OR user_agent is empty, evaluated alongside
+      other signals (request rate, path pattern) since this alone
+      produces many legitimate false positives (API clients,
+      monitoring probes).

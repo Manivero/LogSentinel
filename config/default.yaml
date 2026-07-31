@@ -1,0 +1,69 @@
+# AI Log Analyzer — default configuration
+#
+# Precedence (highest wins): CLI flags > environment variables (AI_LOG_ANALYZER_*)
+# > --config <file>.yaml > this bundled file > in-code field defaults.
+#
+# Copy this file, edit what you need, and pass --config path/to/your.yaml.
+# You do not need to repeat every key — only the ones you want to override.
+
+ollama:
+  host: "http://localhost:11434"
+  request_timeout_seconds: 120.0
+  connect_timeout_seconds: 10.0
+  # default_model: null           # uncomment + set to skip auto-selection
+  model_preference:
+    - "qwen2.5:7b"
+    - "qwen2.5:14b"
+    - "llama3.2"
+    - "mistral"
+    - "gemma3"
+  embedding_model: "nomic-embed-text"
+  stream_default_cli: true
+  stream_default_api: false
+  max_concurrent_requests: 3
+  max_retries: 2
+  retry_backoff_seconds: 1.5
+
+security:
+  max_file_size_bytes: 104857600     # 100 MB
+  max_line_length: 32768
+  max_lines_per_file: 2000000
+  allowed_encodings:
+    - "utf-8"
+    - "utf-8-sig"
+    - "ascii"
+  allowed_log_roots: []              # empty = no directory allowlist restriction
+
+cache:
+  enabled: true
+  directory: "~/.ai-log-analyzer/cache"
+  ttl_seconds: 86400                 # 24 hours
+  max_size_bytes: 1073741824         # 1 GB
+
+knowledge:
+  enabled: false
+  source_directory: null
+  persist_directory: "~/.ai-log-analyzer/knowledge_index"
+  top_k: 5
+  similarity_threshold: 0.3
+  chunk_size: 800
+  chunk_overlap: 100
+  knowledge_version: "v1"
+
+parsing:
+  sample_lines: 50               # lines sampled to score candidate parsers
+  confidence_threshold: 0.5      # below this, fall back to the generic parser
+
+detection:
+  rules_directory: null              # null = use bundled src/detection/rules
+  enabled_categories: []             # empty = all categories enabled
+
+logging:
+  level: "INFO"
+  json_logs: false
+  log_file: null
+
+analysis:
+  prompt_version: "v1"
+  context_window_tokens: 8192
+  max_context_log_lines: 1

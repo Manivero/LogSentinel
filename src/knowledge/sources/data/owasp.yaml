@@ -1,0 +1,137 @@
+# Bundled OWASP Top 10 (2021 edition) reference data for offline RAG.
+#
+# Category IDs and names follow the public OWASP Top 10 taxonomy.
+# Descriptions and log-evidence notes below are written for this
+# project, summarizing what each category generally looks like in
+# server/application logs rather than reproducing OWASP's own text.
+categories:
+  - id: A01:2021
+    name: Broken Access Control
+    description: >
+      Users able to act outside their intended permissions — viewing or
+      modifying another user's data, accessing admin functionality
+      without authorization, or bypassing access checks entirely
+      (e.g. by editing an object ID in a URL).
+    log_evidence: >
+      Sequential or incrementing IDs requested by the same session
+      shortly after a legitimate request for a different ID; repeated
+      403/401 responses followed by an eventual 200 on a
+      privilege-sensitive endpoint; access to admin paths from a
+      session that never authenticated as an admin.
+
+  - id: A02:2021
+    name: Cryptographic Failures
+    description: >
+      Sensitive data exposed due to missing or weak encryption in
+      transit or at rest — plaintext transmission of credentials,
+      weak/outdated TLS configurations, or predictable tokens.
+    log_evidence: >
+      Plaintext credentials appearing in access logs (a sign
+      credentials are being sent as GET parameters rather than in a
+      POST body over TLS); TLS handshake failures suggesting outdated
+      client or server cipher support; session tokens that are short
+      or sequential rather than cryptographically random.
+
+  - id: A03:2021
+    name: Injection
+    description: >
+      Untrusted input interpreted as a command or query rather than
+      pure data — SQL injection, OS command injection, and
+      cross-site scripting (XSS) are the most common web-facing forms.
+    log_evidence: >
+      Request parameters or paths containing SQL keywords and
+      comment sequences, shell metacharacters, or script tags;
+      repeated variations of the same payload against one parameter,
+      consistent with automated fuzzing for an injectable field.
+
+  - id: A04:2021
+    name: Insecure Design
+    description: >
+      Security weaknesses that stem from how a system was designed —
+      missing rate limiting, missing business-logic checks, or
+      trusting client-side validation — rather than an implementation
+      bug in otherwise-sound design.
+    log_evidence: >
+      Business-logic abuse patterns that don't match any single
+      "attack signature": e.g. a coupon or discount code endpoint
+      called an implausible number of times, or a multi-step workflow
+      completed out of order.
+
+  - id: A05:2021
+    name: Security Misconfiguration
+    description: >
+      Insecure default settings, unnecessary features left enabled,
+      overly verbose error messages, or missing security headers —
+      often the result of what was *not* changed from a default
+      install rather than an active mistake.
+    log_evidence: >
+      Requests for default/example paths that ship with common
+      frameworks and admin panels; verbose stack traces or debug
+      pages appearing in response bodies; requests probing for
+      exposed configuration or environment files (`.env`,
+      `web.config`, `.git/config`).
+
+  - id: A06:2021
+    name: Vulnerable and Outdated Components
+    description: >
+      Using libraries, frameworks, or platform components with known
+      vulnerabilities, often because they were never updated after
+      deployment.
+    log_evidence: >
+      Requests specifically targeting a known CVE in a particular
+      software version, or reconnaissance requests attempting to
+      fingerprint exact software versions (via headers, error pages,
+      or version-specific default paths) before a targeted exploit
+      attempt.
+
+  - id: A07:2021
+    name: Identification and Authentication Failures
+    description: >
+      Weaknesses in confirming a user's identity or maintaining
+      session state — missing brute-force protection, weak password
+      requirements, exposed session identifiers, or improper session
+      invalidation.
+    log_evidence: >
+      Brute-force or credential-stuffing patterns (see MITRE T1110);
+      the same session identifier reused across very different source
+      IPs or user-agents in a short window; successful login without
+      any preceding failed attempts from an account that is normally
+      inactive.
+
+  - id: A08:2021
+    name: Software and Data Integrity Failures
+    description: >
+      Trusting content, updates, or serialized data without verifying
+      their integrity — insecure deserialization is the most common
+      log-visible form, alongside compromised software supply chains.
+    log_evidence: >
+      Requests containing serialized-object-like payloads (framework-
+      specific serialization markers) in parameters that would
+      normally hold simple values; unexpected outbound connections
+      following a request with such a payload.
+
+  - id: A09:2021
+    name: Security Logging and Monitoring Failures
+    description: >
+      Insufficient logging, monitoring, or alerting to detect and
+      respond to a breach in progress — this category is about the
+      absence of evidence as much as its presence, and is part of the
+      motivation for a tool like this one.
+    log_evidence: >
+      Gaps in expected log continuity (a sudden absence of routine
+      events that normally occur regularly); authentication or
+      authorization events logged without the contextual fields
+      (source IP, user, outcome) needed to investigate them later.
+
+  - id: A10:2021
+    name: Server-Side Request Forgery (SSRF)
+    description: >
+      Tricking a server into making an HTTP request to an
+      attacker-chosen destination — often used to reach internal
+      services or cloud metadata endpoints that aren't otherwise
+      reachable from outside the network.
+    log_evidence: >
+      A URL, hostname, or IP-address-shaped value submitted in a
+      parameter that a server-side component then fetches; requests
+      referencing internal/reserved IP ranges or cloud metadata
+      addresses (e.g. 169.254.169.254) in a parameter value.

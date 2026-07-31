@@ -1,0 +1,88 @@
+# Web application attack detection rules (HTTP access/error logs).
+# See src/core/models.py:DetectionRule for the full field reference.
+rules:
+  - id: WEB-001
+    name: SQL Injection Attempt
+    category: web
+    severity: HIGH
+    description: >
+      Request path or query string contains a pattern commonly used in
+      SQL injection payloads (UNION-based, boolean-based, or
+      statement-termination techniques).
+    mitre_technique: T1190
+    tags: [injection, sqli, owasp-a03]
+    conditions:
+      - field: http_path
+        operator: regex
+        value: "(?i)(\\bunion\\b.{1,40}\\bselect\\b|\\bor\\b\\s+1\\s*=\\s*1|--\\s|;--|\\bdrop\\b\\s+\\btable\\b)"
+
+  - id: WEB-002
+    name: Path Traversal Attempt
+    category: web
+    severity: HIGH
+    description: >
+      Request path contains directory traversal sequences targeting
+      files outside the web root (e.g. /etc/passwd via ../../).
+    mitre_technique: T1083
+    tags: [path-traversal, owasp-a01]
+    conditions:
+      - field: http_path
+        operator: regex
+        value: "(\\.\\.%2f|%2e%2e/|\\.\\./|\\.\\.\\\\)"
+
+  - id: WEB-003
+    name: Known Vulnerability Scanner Signature
+    category: web
+    severity: MEDIUM
+    description: >
+      The User-Agent header matches a known automated scanning or
+      exploitation tool.
+    tags: [reconnaissance, scanner]
+    conditions:
+      - field: fields.user_agent
+        operator: regex
+        value: "(?i)(sqlmap|nikto|nmap|masscan|nuclei|dirbuster|gobuster|acunetix|w3af)"
+
+  - id: WEB-004
+    name: Sensitive Admin Path Probing
+    category: web
+    severity: MEDIUM
+    description: >
+      Request targets a common administrative, credential, or
+      configuration endpoint, often seen during reconnaissance.
+    tags: [reconnaissance, owasp-a05]
+    conditions:
+      - field: http_path
+        operator: regex
+        value: "(?i)(wp-login\\.php|wp-admin|phpmyadmin|/admin/config|\\.env$|\\.git/config)"
+
+  - id: WEB-005
+    name: Cross-Site Scripting (XSS) Attempt
+    category: web
+    severity: HIGH
+    description: >
+      Request path or parameters contain a pattern commonly used in
+      cross-site scripting payloads.
+    mitre_technique: T1059.007
+    tags: [injection, xss, owasp-a03]
+    conditions:
+      - field: http_path
+        operator: regex
+        value: "(?i)(<script|onerror\\s*=|onload\\s*=|javascript:|<img[^>]+src)"
+
+  - id: WEB-006
+    name: High Rate of Error Responses From One Source
+    category: web
+    severity: MEDIUM
+    description: >
+      A single source IP generated an unusually high volume of client or
+      server error responses in a short window, consistent with
+      automated scanning, fuzzing, or brute forcing.
+    tags: [reconnaissance, scanner]
+    conditions:
+      - field: http_status
+        operator: gte
+        value: 400
+    threshold_count: 10
+    threshold_window_seconds: 60
+    threshold_group_by: source_ip

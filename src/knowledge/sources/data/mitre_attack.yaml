@@ -1,0 +1,147 @@
+# Bundled MITRE ATT&CK reference data for offline RAG.
+#
+# A curated subset of techniques most relevant to server/network log
+# analysis (not the full framework — see README for how to point
+# KnowledgeConfig.source_directory at additional material). Technique
+# IDs and names follow the public MITRE ATT&CK taxonomy; descriptions
+# and log-evidence notes below are written for this project, summarizing
+# each technique's general characteristics rather than reproducing any
+# single source's text.
+techniques:
+  - id: T1110
+    name: Brute Force
+    tactic: TA0006 (Credential Access)
+    description: >
+      Systematic, automated guessing of account credentials, usually
+      against an authentication service such as SSH, RDP, or a web
+      login form. Sub-techniques include password guessing (one
+      password against many usernames), password spraying (many
+      common passwords against many usernames, to avoid lockouts),
+      and credential stuffing (reusing credentials leaked elsewhere).
+    log_evidence: >
+      A high volume of failed authentication events from one source
+      in a short window, often against multiple usernames, sometimes
+      followed by a single success. Log-analysis tools typically flag
+      this via a threshold rule (N failures per IP per time window).
+
+  - id: T1078
+    name: Valid Accounts
+    tactic: TA0001 / TA0003 / TA0004 / TA0005 (Initial Access, Persistence,
+      Privilege Escalation, Defense Evasion)
+    description: >
+      Use of legitimate, previously compromised credentials to access a
+      system, bypassing the need to exploit a vulnerability. Frequently
+      the follow-on step after a successful brute-force or phishing
+      campaign, and often the hardest activity to distinguish from
+      normal usage.
+    log_evidence: >
+      A successful login that is anomalous in some other dimension —
+      unusual source IP or geography, unusual time of day, immediately
+      following a burst of failed attempts from the same or a related
+      IP, or against a normally-unused privileged account.
+
+  - id: T1190
+    name: Exploit Public-Facing Application
+    tactic: TA0001 (Initial Access)
+    description: >
+      Using a software vulnerability in an internet-facing service
+      (web application, API, or exposed daemon) to gain unauthorized
+      access or execute code, as opposed to using stolen credentials.
+    log_evidence: >
+      Requests with malformed or unusual payloads targeting a specific
+      application endpoint, often immediately preceded by
+      reconnaissance-style probing of the same host, or unusual
+      process/child-process activity on the server following a
+      specific web request.
+
+  - id: T1059.007
+    name: "Command and Scripting Interpreter: JavaScript"
+    tactic: TA0002 (Execution)
+    description: >
+      Abuse of a JavaScript execution context — most commonly in a web
+      browser via a cross-site scripting (XSS) payload — to run
+      attacker-controlled script logic in the context of a trusted
+      site or session.
+    log_evidence: >
+      Request parameters or paths containing script tags, inline event
+      handlers, or `javascript:` URIs; often paired with unusual
+      referer headers or attempts to submit the same payload to
+      multiple parameters or endpoints.
+
+  - id: T1083
+    name: File and Directory Discovery
+    tactic: TA0007 (Discovery)
+    description: >
+      Enumerating files and directories on a target system, often to
+      locate configuration files, credentials, or other sensitive data
+      once initial access is achieved, or to map an application's
+      structure before attempting exploitation.
+    log_evidence: >
+      A single source requesting many distinct paths in quick
+      succession, especially predictable/common paths (`.env`,
+      `/admin`, `/.git/config`) rather than paths a normal user would
+      navigate to via links.
+
+  - id: T1046
+    name: Network Service Discovery
+    tactic: TA0007 (Discovery)
+    description: >
+      Enumerating services running on other systems on a network,
+      typically via port scanning, to identify potential attack
+      targets or lateral-movement opportunities.
+    log_evidence: >
+      A high volume of connection attempts to many distinct ports or
+      hosts from one source in a short window, often with minimal or
+      no successful application-layer interaction.
+
+  - id: T1589
+    name: Gather Victim Identity Information
+    tactic: TA0043 (Reconnaissance)
+    description: >
+      Collecting information about valid usernames, email addresses,
+      or employee names ahead of a targeted credential attack —
+      frequently done by enumerating which usernames a login system
+      will accept before attempting to guess passwords for them.
+    log_evidence: >
+      A high volume of authentication attempts against distinct,
+      often sequential or dictionary-derived usernames from one
+      source, with a response pattern that reveals whether each
+      username exists (e.g. a distinct "invalid user" message).
+
+  - id: T1595
+    name: Active Scanning
+    tactic: TA0043 (Reconnaissance)
+    description: >
+      Directly probing a target's infrastructure — via port scans,
+      vulnerability scanners, or web crawlers — to gather information
+      later used to plan an attack.
+    log_evidence: >
+      Requests bearing the signature of a known scanning tool (a
+      distinctive User-Agent, unusual header ordering, or the tool's
+      default request patterns) hitting many endpoints in a short
+      window.
+
+  - id: T1499
+    name: Endpoint Denial of Service
+    tactic: TA0040 (Impact)
+    description: >
+      Exhausting a service's resources (connections, CPU, memory) so
+      legitimate users cannot use it, without necessarily involving
+      any form of unauthorized access.
+    log_evidence: >
+      A very high request or connection rate from one or a small
+      number of sources, or a normal-looking request repeated at a
+      rate far exceeding plausible human or typical client behavior,
+      often paired with rising error rates or upstream timeouts.
+
+  - id: T1071
+    name: Application Layer Protocol
+    tactic: TA0011 (Command and Control)
+    description: >
+      Using a standard application protocol (HTTP/S, DNS, etc.) to
+      blend command-and-control traffic in with normal network
+      traffic, making it harder to distinguish from legitimate use.
+    log_evidence: >
+      Regular, periodic (beaconing) outbound requests to an unfamiliar
+      or newly-seen destination, often with a small, consistent
+      payload size and minimal variation between requests.

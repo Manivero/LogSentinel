@@ -1,0 +1,53 @@
+# Network-level anomaly detection rules.
+# See src/core/models.py:DetectionRule for the full field reference.
+rules:
+  - id: NET-001
+    name: Possible Port/Service Scan Activity
+    category: network
+    severity: MEDIUM
+    description: >
+      A single source IP generated a high number of distinct connection
+      or error events in a short window, consistent with port or service
+      scanning.
+    mitre_technique: T1046
+    tags: [reconnaissance, port-scan]
+    conditions:
+      - field: source_ip
+        operator: exists
+    threshold_count: 20
+    threshold_window_seconds: 60
+    threshold_group_by: source_ip
+
+  - id: NET-002
+    name: nginx Upstream/Backend Failure
+    category: network
+    severity: MEDIUM
+    description: >
+      nginx reported an upstream or backend connectivity failure, which
+      can indicate service disruption, misconfiguration, or a targeted
+      denial-of-service attempt against a backend service.
+    tags: [availability]
+    conditions:
+      - field: format
+        operator: equals
+        value: nginx_error
+      - field: message
+        operator: regex
+        value: "(?i)(upstream|connect\\(\\) failed|no live upstreams)"
+
+  - id: NET-003
+    name: SSL/TLS Handshake Failure
+    category: network
+    severity: LOW
+    description: >
+      A TLS handshake failure was logged, which can indicate a
+      misconfigured client, an expired/invalid certificate, or a probing
+      tool testing for weak TLS configurations.
+    tags: [tls, availability]
+    conditions:
+      - field: format
+        operator: equals
+        value: nginx_error
+      - field: message
+        operator: contains
+        value: "SSL_do_handshake"

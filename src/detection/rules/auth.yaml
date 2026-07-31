@@ -1,0 +1,81 @@
+# Authentication-related detection rules.
+# See src/core/models.py:DetectionRule for the full field reference.
+rules:
+  - id: AUTH-001
+    name: SSH Brute Force Attempt
+    category: auth
+    severity: HIGH
+    description: >
+      Multiple failed SSH authentication attempts from the same source IP
+      within a short time window, indicative of an automated brute-force
+      or credential-stuffing attack.
+    mitre_technique: T1110
+    tags: [brute-force, ssh, authentication]
+    conditions:
+      - field: fields.auth_result
+        operator: equals
+        value: failed
+    condition_logic: AND
+    threshold_count: 5
+    threshold_window_seconds: 120
+    threshold_group_by: source_ip
+
+  - id: AUTH-002
+    name: Root Account Authentication Attempt
+    category: auth
+    severity: MEDIUM
+    description: >
+      A direct authentication attempt against the root account was
+      observed. Direct root login is best practice to disable entirely.
+    mitre_technique: T1078.001
+    tags: [privileged-account, ssh]
+    conditions:
+      - field: user
+        operator: equals
+        value: root
+      - field: process
+        operator: equals
+        value: sshd
+
+  - id: AUTH-003
+    name: Invalid User Enumeration
+    category: auth
+    severity: LOW
+    description: >
+      Authentication was attempted against a username that does not
+      exist on the system, often seen during automated username
+      enumeration ahead of a credential-stuffing attack.
+    tags: [reconnaissance, ssh]
+    conditions:
+      - field: message
+        operator: contains
+        value: "invalid user"
+
+  - id: AUTH-004
+    name: Privilege Escalation via sudo
+    category: auth
+    severity: LOW
+    description: A user invoked sudo to run a command as another user (typically root).
+    tags: [privilege-escalation]
+    conditions:
+      - field: process
+        operator: equals
+        value: sudo
+
+  - id: AUTH-005
+    name: Repeated Invalid User Attempts (Enumeration Sweep)
+    category: auth
+    severity: MEDIUM
+    description: >
+      A high volume of "invalid user" attempts from a single source IP in
+      a short window, consistent with an automated username-enumeration
+      sweep ahead of a targeted brute-force attempt.
+    mitre_technique: T1589
+    tags: [reconnaissance, ssh, enumeration]
+    conditions:
+      - field: message
+        operator: contains
+        value: "invalid user"
+    threshold_count: 4
+    threshold_window_seconds: 120
+    threshold_group_by: source_ip
