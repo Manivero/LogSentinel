@@ -20,7 +20,7 @@ Legend: `[x]` complete and self-reviewed · `[~]` in progress · `[ ]` pending
 - [x] Response caching
 - [x] Knowledge base (RAG)
 - [x] Report generators
-- [ ] Performance metrics
+- [x] Performance metrics
 - [ ] CLI interface
 - [ ] Docker setup
 - [ ] CI/CD workflows
@@ -121,11 +121,25 @@ Legend: `[x]` complete and self-reviewed · `[~]` in progress · `[ ]` pending
 - [x] `terminal.py` — Rich console summary + the required post-run
       performance metrics table
 
+### `src/metrics/` — depends on `core`, `analysis.cache`
+- [x] `collector.py` — `MetricsCollector`: context-manager stage timing +
+      `record_*` calls, rates computed once in `finalize()` with a
+      minimum-duration floor to avoid nonsensical rates from near-zero
+      elapsed time (see convention #25)
+- [x] `benchmark.py` — `run_benchmark`: repeated-run timing with
+      min/max/mean/median/stdev
+
 ### Not yet started
-- `src/metrics/`, `main.py`, `tests/unit/*.py` (pytest suites —
-  fixtures already exist), `docs/` (ADRs),
-  `Dockerfile`/`docker-compose.yml`, `.github/workflows/`, `Makefile`,
-  `README.md`, `.env.example`.
+- `main.py`, `tests/unit/*.py` (pytest suites — fixtures already exist),
+  `docs/` (ADRs), `Dockerfile`/`docker-compose.yml`, `.github/workflows/`,
+  `Makefile`, `README.md`, `.env.example`.
+
+**Everything `main.py` needs now exists and is independently verified:**
+`ParserFactory`, `DetectionEngine` + `build_context`, `AIAnalyzer`,
+`KnowledgeBase`, all five reporters, `MetricsCollector` +
+`run_benchmark`, `src.ollama.manager` for model selection/health,
+`src.core.config.load_config`. `main.py` is now purely an orchestration
+and CLI-argument-parsing task, not a design task.
 
 ### Test fixtures already in place (`tests/fixtures/`)
 - `sample_logs/`: `auth.log`, `syslog`, `access.log`, `error.log`,
@@ -334,6 +348,21 @@ Legend: `[x]` complete and self-reviewed · `[~]` in progress · `[ ]` pending
     call. Apply the same pattern (validator at the model boundary, not
     scattered call-site fixes) to any future free-text field sourced
     from YAML/config.
+25. **Rates need a minimum-duration floor, not just a zero check.**
+    `MetricsCollector.finalize()` only computes a rate
+    (lines/events/tokens per second) when the stage's measured duration
+    clears `_MIN_DURATION_FOR_RATE` (0.01s) — `duration > 0` isn't a
+    strong enough guard, since a near-instantaneous stage (e.g. an
+    AI-analysis stage that was entirely cache hits) can have a
+    real-but-tiny positive duration and produce a rate in the millions,
+    which is technically-correct arithmetic but a misleading number to
+    show anyone.
+26. **`reporting` may depend on `metrics` (one direction only).**
+    `terminal.render_benchmark` takes a `metrics.benchmark.BenchmarkResult`
+    directly — reporting renders "things worth showing the user," and a
+    benchmark result is one of those things, same as `PerformanceMetrics`
+    from `core.models`. `metrics` does not and must not import anything
+    from `reporting`.
 
 ## Verification performed this session
 - `python3 -c "import ..."` / dedicated scripts under `/home/claude/verify/`
@@ -376,15 +405,36 @@ Legend: `[x]` complete and self-reviewed · `[~]` in progress · `[ ]` pending
   interactive test) are exactly what `tests/unit/` and
   `tests/integration/` should contain — porting them is mechanical.
 
+## Verification performed this session (metrics)
+- `test_metrics.py` runs `MetricsCollector` against real parsing output
+  (not mocked), confirming `lines_per_second` reflects genuine work.
+- `ruff check`, `ruff format --check`, and `mypy --strict` pass with
+  zero issues across all 51 source files as of this checkpoint.
+- One more real bug found and fixed: `MetricsCollector` could report
+  rates in the millions from near-zero-duration stages (convention #25)
+  — caught by a test that (correctly, deliberately) didn't do any real
+  work inside the timed blocks.
+- Cumulative bug count across all sessions so far: 9 (see this file's
+  git history / earlier revisions for the full list if useful context;
+  the current list is trimmed here to keep this section from growing
+  unbounded — the CHANGELOG's "Fixed" section is the permanent record).
+
 ## Next module to implement
-`src/metrics/` — `collector.py` (a `PerformanceMetrics`-populating
-context-manager/timer wrapped around each pipeline stage; the model
-already exists in full in `core/models.py`, verified again this session
-via the reporting fixtures, so this is mostly instrumentation, not
-design) and `benchmark.py` (repeat-N-times timing utility for the
-`--benchmark` CLI flag). After that, `main.py` finally wires the whole
-pipeline together end-to-end: parse → detect → correlate → AI-analyze
-flagged entries → (optionally) retrieve knowledge → report → show
-metrics — every piece it needs (`ParserFactory`, `DetectionEngine`,
-`build_context`, `AIAnalyzer`, `KnowledgeBase`, all five reporters) is
-now built and independently verified.
+`main.py` — the CLI entry point (Typer + Rich), wiring together every
+subsystem built so far. Commands per the original spec:
+`analyze <paths> [--stream/--no-stream] [--knowledge-base DIR]
+[--output PATH --format json,md,html,csv] [--benchmark] [--model NAME]
+[--no-cache]`, `check` (Ollama health via `src.ollama.health`/`manager`),
+`models` (list installed models), `knowledge-stats`, `cache-clear`,
+`cache-stats`. Pipeline order: `load_config` → `ollama.manager.ensure_ready`
++ `select_model` → for each path, `ParserFactory.parse_file` → merge all
+entries → `DetectionEngine.evaluate` → `detection.context.build_context`
+→ `AIAnalyzer.analyze_many` over entries behind a `DetectionMatch` (see
+convention #16) → optionally `KnowledgeBase.retrieve_context` per entry
+before analysis → assemble `AnalysisReport` → `reporting.*.render` for
+each requested format → `reporting.terminal.render_report` +
+`render_metrics` always. Wrap the whole thing with `MetricsCollector`
+per convention #25. This is the last source module before Docker/
+CI/CD/tests/docs — budget real time for it since it's where every
+integration assumption made across the last several sessions gets
+tested against reality simultaneously.

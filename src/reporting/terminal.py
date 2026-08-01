@@ -11,6 +11,7 @@ from rich.table import Table
 from rich.text import Text
 
 from src.core.models import AnalysisReport, PerformanceMetrics, Severity
+from src.metrics.benchmark import BenchmarkResult
 
 _SEVERITY_STYLE = {
     Severity.CRITICAL: "bold white on red",
@@ -135,4 +136,19 @@ def render_metrics(metrics: PerformanceMetrics, console: Console) -> None:
         "Total", "Wall clock time", f"{metrics.total_wall_time_seconds:.2f}s", style="bold"
     )
 
+    console.print(table)
+
+
+def render_benchmark(result: BenchmarkResult, console: Console) -> None:
+    """Print aggregate timing statistics from a `--benchmark` run."""
+    table = Table(title="Benchmark Results")
+    table.add_column("Statistic")
+    table.add_column("Value", justify="right")
+    table.add_row("Label", result.label)
+    table.add_row("Iterations", str(result.iterations))
+    table.add_row("Min", f"{result.min_seconds:.3f}s")
+    table.add_row("Max", f"{result.max_seconds:.3f}s")
+    table.add_row("Mean", f"{result.mean_seconds:.3f}s")
+    table.add_row("Median", f"{result.median_seconds:.3f}s")
+    table.add_row("Std Dev", f"{result.stdev_seconds:.3f}s")
     console.print(table)

@@ -123,6 +123,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Playwright tests (`src/reporting/html_report.py`); and Rich console
   output including the required post-run performance metrics table
   (`src/reporting/terminal.py`).
+- `MetricsCollector`: context-manager stage timing plus count recording
+  for parsing, detection, AI analysis, and reporting, computing derived
+  rates (lines/events/tokens per second) once at the end with a
+  minimum-duration floor to avoid nonsensical rates from near-zero
+  elapsed time (`src/metrics/collector.py`).
+- `run_benchmark`: repeated-run timing utility producing min/max/mean/
+  median/stdev statistics for the `--benchmark` CLI flag, plus a
+  terminal renderer for the results (`src/metrics/benchmark.py`,
+  `reporting.terminal.render_benchmark`).
 
 ### Security
 - ChromaDB's `anonymized_telemetry` setting (routed through PostHog)
@@ -160,5 +169,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previously matched nothing despite being exactly what a user would
   expect to search for — caught by an interactive Playwright test, not
   static inspection of the generated markup.
+- `MetricsCollector` no longer reports rates (events/sec, tokens/sec) in
+  the millions when a stage's measured duration is near-zero (e.g. an
+  AI-analysis stage that was entirely cache hits); rate calculation now
+  requires a minimum duration floor before dividing.
 
 [Unreleased]: https://github.com/your-username/ai-log-analyzer/compare/v0.1.0...HEAD
