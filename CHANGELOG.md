@@ -132,6 +132,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   median/stdev statistics for the `--benchmark` CLI flag, plus a
   terminal renderer for the results (`src/metrics/benchmark.py`,
   `reporting.terminal.render_benchmark`).
+- `main.py`: the CLI entry point (Typer + Rich) wiring every subsystem
+  together into `analyze`, `check`, `models`, `knowledge-stats`,
+  `cache-clear`, and `cache-stats`. `analyze` runs the full parse →
+  detect → correlate → (optional) knowledge retrieval → AI-analyze →
+  report pipeline, AI-analyzing only deduplicated entries behind a rule
+  match (never every parsed line) with bounded concurrency and per-entry
+  knowledge-base queries. Supports `--stream`/`--no-stream`,
+  `--knowledge-base`, `--output`/`--format` (json/md/html/csv),
+  `--benchmark`, `--model`, `--log-format` (forced parser), `--no-cache`,
+  and `--auto-start-ollama`. Verified end-to-end through the actual CLI
+  (`typer.testing.CliRunner`) against both a genuinely unreachable
+  Ollama (graceful failure with installation guidance) and a mocked-
+  healthy one covering the complete pipeline, all four export formats,
+  streaming, and cache hit/miss behavior across repeated invocations.
 
 ### Security
 - ChromaDB's `anonymized_telemetry` setting (routed through PostHog)

@@ -21,7 +21,7 @@ Legend: `[x]` complete and self-reviewed · `[~]` in progress · `[ ]` pending
 - [x] Knowledge base (RAG)
 - [x] Report generators
 - [x] Performance metrics
-- [ ] CLI interface
+- [x] CLI interface
 - [ ] Docker setup
 - [ ] CI/CD workflows
 - [ ] Tests
@@ -129,17 +129,34 @@ Legend: `[x]` complete and self-reviewed · `[~]` in progress · `[ ]` pending
 - [x] `benchmark.py` — `run_benchmark`: repeated-run timing with
       min/max/mean/median/stdev
 
-### Not yet started
-- `main.py`, `tests/unit/*.py` (pytest suites — fixtures already exist),
-  `docs/` (ADRs), `Dockerfile`/`docker-compose.yml`, `.github/workflows/`,
-  `Makefile`, `README.md`, `.env.example`.
+### `main.py` — depends on every `src` package (the integration point)
+- [x] `analyze` — full pipeline: parse → detect → correlate → (optional)
+      index/query knowledge base → AI-analyze only flagged, deduplicated
+      entries with bounded concurrency → assemble report → write
+      requested formats → always show terminal summary + metrics
+- [x] `check`, `models` — Ollama environment/model introspection
+- [x] `knowledge-stats`, `cache-clear`, `cache-stats` — subsystem
+      introspection/management, no Ollama required
+- [x] `--benchmark` — repeated full-pipeline runs via `metrics.benchmark`
+- [x] `--stream`/`--no-stream`, `--no-cache`, `--knowledge-base`,
+      `--model`, `--log-format`, `--output`/`--format`,
+      `--auto-start-ollama` — all wired and tested
+- [x] **Verified through the actual CLI**, not just by calling internal
+      functions directly: `typer.testing.CliRunner` end-to-end, with
+      `OllamaClient._new_client` patched at the class level (the single
+      choke point for every HTTP client `OllamaClient` creates) so a
+      mocked Ollama serves `/api/version`, `/api/tags`, and
+      `/api/generate` — no application code changed to make this
+      possible (see convention #27)
 
-**Everything `main.py` needs now exists and is independently verified:**
-`ParserFactory`, `DetectionEngine` + `build_context`, `AIAnalyzer`,
-`KnowledgeBase`, all five reporters, `MetricsCollector` +
-`run_benchmark`, `src.ollama.manager` for model selection/health,
-`src.core.config.load_config`. `main.py` is now purely an orchestration
-and CLI-argument-parsing task, not a design task.
+### Not yet started
+- `tests/unit/*.py`, `tests/integration/*.py` (formal pytest — fixtures
+  already exist, and every ad hoc `/home/claude/verify/` script this
+  session is a near-direct port), `docs/*.md` (ADRs), `Dockerfile`,
+  `docker-compose.yml`, `.dockerignore` review, `.github/workflows/*.yml`,
+  `Makefile`, `README.md`, `.env.example`, `requirements-api.txt` (if the
+  optional FastAPI layer is ever built — not required by the original
+  spec's completion criteria).
 
 ### Test fixtures already in place (`tests/fixtures/`)
 - `sample_logs/`: `auth.log`, `syslog`, `access.log`, `error.log`,
@@ -363,20 +380,58 @@ and CLI-argument-parsing task, not a design task.
     benchmark result is one of those things, same as `PerformanceMetrics`
     from `core.models`. `metrics` does not and must not import anything
     from `reporting`.
+27. **Testing a full CLI pipeline without a real Ollama server**: patch
+    `OllamaClient._new_client` at the class level
+    (`unittest.mock.patch.object(OllamaClient, "_new_client", ...)`) to
+    always return an `httpx.AsyncClient` wired to a mock transport. This
+    is the single choke point every one of `OllamaClient`'s methods uses
+    to build its HTTP client, so patching it there — rather than each
+    call site — makes the *entire* CLI pipeline (health check, model
+    listing, generation, streaming) testable through
+    `typer.testing.CliRunner` with zero production code changes. Combine
+    with `--config` pointing at a temp YAML file (isolated cache
+    directory) so CLI tests never touch the real `~/.ai-log-analyzer/`.
+28. **`AIAnalyzer` doesn't know about detection IDs, and that's
+    correct.** `main.py` enriches each returned `AnalysisRecord` with
+    `related_detection_ids` via `record.model_copy(update=...)` *after*
+    analysis, using a `(source_file, line_number)` key built from the
+    detection list — rather than threading detection IDs into
+    `AIAnalyzer` itself. Keeps the analyzer's interface focused on "here
+    is one entry, analyze it," with all detection-engine-specific
+    bookkeeping living in the orchestration layer that actually has both
+    pieces of information.
+29. **AI analysis targets deduplicated flagged entries, concurrently,
+    with knowledge retrieval per entry.** `main.py` does *not* use
+    `AIAnalyzer.analyze_many` (which takes one shared
+    `knowledge_context` for a whole batch) — it calls
+    `utils.concurrency.bounded_gather` directly with a closure that does
+    per-entry `KnowledgeBase.retrieve_context` before
+    `analyzer.analyze_entry`, since each flagged entry's specific
+    content should drive its own retrieval query. `analyze_many` remains
+    available/tested for simpler callers that don't need per-entry
+    knowledge. Live token rendering (`live_render=True`) is only enabled
+    when concurrency can't interleave output (a single flagged entry, or
+    `max_concurrent_requests == 1`) — otherwise concurrent streams would
+    garble each other on the same console.
 
-## Verification performed this session
+## Verification performed, cumulative across sessions
 - `python3 -c "import ..."` / dedicated scripts under `/home/claude/verify/`
   (outside the repo, not shipped) smoke-test every module against real
   installed dependencies. A shared `report_fixture.py` builds one
   realistic `AnalysisReport` from real parsing/detection output plus two
-  hand-built `AnalysisRecord`s (one HIGH, one degraded) and is reused
-  across every reporting-format test, so all five formats are verified
-  against the *same* underlying data rather than five different toy
-  fixtures that could each hide a format-specific bug.
+  hand-built `AnalysisRecord`s (one HIGH, one degraded), reused across
+  every reporting-format test. `test_metrics.py` runs `MetricsCollector`
+  against real (not mocked) parsing output. The CLI test suite
+  (`test_cli_no_ollama.py`, `test_cli_full_pipeline.py`,
+  `test_cli_extra_scenarios.py`) drives the actual `main.py` Typer app
+  via `CliRunner`, covering unreachable-Ollama graceful failure,
+  mocked-healthy full pipeline (all 4 export formats individually
+  re-parsed and asserted on), streaming, cache hit/miss across repeated
+  invocations, `--no-cache`, and `--benchmark`.
 - `ruff check`, `ruff format --check`, and `mypy --strict` pass with
-  zero issues across all 48 source files as of this checkpoint.
-- Real bugs found and fixed via this verification, cumulative across
-  sessions (not just caught by inspection):
+  zero issues across all 52 source files as of this checkpoint.
+- Real bugs found and fixed via this verification (not just caught by
+  inspection), in the order found:
   1. `OllamaClient._post_with_retries` never caught the `httpx`
      exceptions it needed to catch for its own retry logic to trigger.
   2. `AuthLogParser`'s confidence formula could mathematically never
@@ -390,51 +445,51 @@ and CLI-argument-parsing task, not a design task.
      heuristic.
   6. ChromaDB's default telemetry — caught before it shipped.
   7. YAML folded-scalar trailing newlines leaking into every rule
-     description shown in every report format — fixed once at the
-     `DetectionRule` model boundary (convention #24).
+     description shown in every report format.
   8. `html_report.py`'s search index excluded `entry.process`, silently
-     breaking searches like `"sshd"` — caught only because the
-     interactive test used a real browser, not string-matching on
-     generated markup (convention #23).
+     breaking searches like `"sshd"`.
+  9. `MetricsCollector` could report rates in the millions from
+     near-zero-duration stages.
+- One test-design bug caught and fixed *in the test itself*, not the
+  app: an early streaming-mode CLI test analyzed `access.log` without
+  `--no-cache`, silently pre-warming the cache before a later
+  cache-behavior test ran against the same file. Fixed by isolating the
+  streaming test with `--no-cache` — shared test state (here, a cache
+  directory reused across cases in one script) needs the same care as
+  shared state in application code.
 - Ollama endpoint shapes cross-checked against official docs via web
   search in an earlier session.
 - Formal `pytest` suites remain a deliberately separate later phase.
   Fixtures are already in place in `tests/fixtures/`; the ad hoc
   `/home/claude/verify/` scripts are not shipped, but their test cases
-  (including `report_fixture.py`'s realistic report and the Playwright
-  interactive test) are exactly what `tests/unit/` and
-  `tests/integration/` should contain — porting them is mechanical.
+  are exactly what `tests/unit/` and `tests/integration/` should
+  contain — porting them is mechanical, not exploratory, work.
 
-## Verification performed this session (metrics)
-- `test_metrics.py` runs `MetricsCollector` against real parsing output
-  (not mocked), confirming `lines_per_second` reflects genuine work.
-- `ruff check`, `ruff format --check`, and `mypy --strict` pass with
-  zero issues across all 51 source files as of this checkpoint.
-- One more real bug found and fixed: `MetricsCollector` could report
-  rates in the millions from near-zero-duration stages (convention #25)
-  — caught by a test that (correctly, deliberately) didn't do any real
-  work inside the timed blocks.
-- Cumulative bug count across all sessions so far: 9 (see this file's
-  git history / earlier revisions for the full list if useful context;
-  the current list is trimmed here to keep this section from growing
-  unbounded — the CHANGELOG's "Fixed" section is the permanent record).
-
-## Next module to implement
-`main.py` — the CLI entry point (Typer + Rich), wiring together every
-subsystem built so far. Commands per the original spec:
-`analyze <paths> [--stream/--no-stream] [--knowledge-base DIR]
-[--output PATH --format json,md,html,csv] [--benchmark] [--model NAME]
-[--no-cache]`, `check` (Ollama health via `src.ollama.health`/`manager`),
-`models` (list installed models), `knowledge-stats`, `cache-clear`,
-`cache-stats`. Pipeline order: `load_config` → `ollama.manager.ensure_ready`
-+ `select_model` → for each path, `ParserFactory.parse_file` → merge all
-entries → `DetectionEngine.evaluate` → `detection.context.build_context`
-→ `AIAnalyzer.analyze_many` over entries behind a `DetectionMatch` (see
-convention #16) → optionally `KnowledgeBase.retrieve_context` per entry
-before analysis → assemble `AnalysisReport` → `reporting.*.render` for
-each requested format → `reporting.terminal.render_report` +
-`render_metrics` always. Wrap the whole thing with `MetricsCollector`
-per convention #25. This is the last source module before Docker/
-CI/CD/tests/docs — budget real time for it since it's where every
-integration assumption made across the last several sessions gets
-tested against reality simultaneously.
+## Next steps
+Core application is now feature-complete and end-to-end verified
+(`main.py analyze` genuinely works against a real Ollama installation —
+every integration point has been exercised, just with a mocked
+transport standing in for the network call itself). What remains is
+packaging/process, not design:
+1. `tests/unit/*.py`, `tests/integration/test_workflow.py` — port the
+   `/home/claude/verify/` scripts into the real pytest suite they were
+   modeled on from the start (same fixtures, same assertions,
+   `pytest-asyncio` for the async ones). Target >85% coverage per the
+   original completion criteria.
+2. `docs/ADR-0001` through `ADR-0004` — architecture, parser design, RAG
+   design, Ollama client design. Every non-obvious decision is already
+   written down in this file's "Conventions" sections above; writing the
+   ADRs is mostly organizing that material into four documents, not
+   re-deriving it.
+3. `Dockerfile`, `docker-compose.yml`, `.dockerignore` review — multi-
+   stage build, non-root user, healthchecks, volumes for
+   logs/reports/cache/knowledge_data. `docker-compose.yml` needs an
+   `ollama` service alongside the app service.
+4. `.github/workflows/{lint,tests,release}.yml`.
+5. `Makefile` — targets are already named in the original spec
+   (`install`, `install-dev`, `lint`, `format`, `test`, `test-cov`,
+   `run`, `docker-build`, `docker-up`, `docker-down`, `clean`) and map
+   directly onto commands already used throughout this session (`ruff
+   check`, `ruff format`, `mypy`, `pytest`).
+6. `README.md`, `.env.example` — write last, once Docker/Makefile exist
+   to document accurately.
